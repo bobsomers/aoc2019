@@ -46,87 +46,107 @@ impl Coord {
     }
 }
 
-fn populate(occupied: &mut HashSet<Coord>, point: Coord, intersect: &mut HashSet<Coord>) {
-    dbg!(point);
-    if !occupied.insert(point) {
-        intersect.insert(point);
-    }
-}
+fn populate_move(current: &Coord, mv: &Move, occupied: &mut HashSet<Coord>) -> Coord {
+    let mut x0 = current.x;
+    let mut x1 = current.x + 1;
+    let mut y0 = current.y;
+    let mut y1 = current.y + 1;
 
-#[test]
-fn test_populate() {
-    let mut occupied = HashSet::new();
-    let mut intersect = HashSet::new();
-    
-    populate(&mut occupied, Coord::new(1, 2), &mut intersect);
-    assert_eq!(1, occupied.len());
-    assert_eq!(0, intersect.len());
-    
-    populate(&mut occupied, Coord::new(2, 2), &mut intersect);
-    assert_eq!(2, occupied.len());
-    assert_eq!(0, intersect.len());
-
-    populate(&mut occupied, Coord::new(1, 2), &mut intersect);
-    assert_eq!(2, occupied.len());
-    assert_eq!(1, intersect.len());
-}
-
-fn populate_move(current: &Coord, mv: &Move, occupied: &mut HashSet<Coord>, intersect: &mut HashSet<Coord>) {
     match mv {
-        Move::Up(amount) => {
-            for i in current.y..(current.y + amount) {
-                populate(occupied, Coord::new(current.x, i + 1), intersect);
+        Move::Up(amount) => y1 += amount,
+        Move::Down(amount) => y0 -= amount,
+        Move::Left(amount) => x0 -= amount,
+        Move::Right(amount) => x1 += amount,
+    }
+
+    for x in x0..x1 {
+        for y in y0..y1 {
+            if x == y {
+                continue;
             }
-        },
-        Move::Down(amount) => {
-            for i in (current.y - amount)..current.y {
-                populate(occupied, Coord::new(current.x, i), intersect);
-            }
-        },
-        Move::Left(amount) => {
-            for i in (current.x - amount)..current.x {
-                populate(occupied, Coord::new(i, current.y), intersect);
-            }
-        },
-        Move::Right(amount) => {
-            for i in current.x..(current.x + amount) {
-                populate(occupied, Coord::new(i + 1, current.y), intersect);
-            }
-        },
+            occupied.insert(Coord::new(x, y));
+        }
+    }
+
+    // Return new cursor position.
+    match mv {
+        Move::Up(_) => Coord::new(x0, y1 - 1),
+        Move::Down(_) => Coord::new(x0, y0),
+        Move::Left(_) => Coord::new(x0, y0),
+        Move::Right(_) => Coord::new(x1 - 1, y0),
     }
 }
 
 #[test]
 fn test_populate_move() {
     let mut occupied: HashSet<Coord> = HashSet::new();
-    let mut intersect: HashSet<Coord> = HashSet::new();
-
-    populate_move(&Coord::new(1, 1), &Move::Up(3), &mut occupied, &mut intersect);
+    let cursor = populate_move(&Coord::new(1, 1), &Move::Up(3), &mut occupied);
     assert_eq!(3, occupied.len());
+    assert_eq!(Coord::new(1, 4), cursor);
     assert!(occupied.contains(&Coord::new(1, 2)));
     assert!(occupied.contains(&Coord::new(1, 3)));
     assert!(occupied.contains(&Coord::new(1, 4)));
 
-    occupied.clear();
-    populate_move(&Coord::new(1, 1), &Move::Down(3), &mut occupied, &mut intersect);
+    let mut occupied: HashSet<Coord> = HashSet::new();
+    let cursor = populate_move(&Coord::new(1, 1), &Move::Down(3), &mut occupied);
     assert_eq!(3, occupied.len());
+    assert_eq!(Coord::new(1, -2), cursor);
     assert!(occupied.contains(&Coord::new(1, 0)));
     assert!(occupied.contains(&Coord::new(1, -1)));
     assert!(occupied.contains(&Coord::new(1, -2)));
 
-    occupied.clear();
-    populate_move(&Coord::new(1, 1), &Move::Left(3), &mut occupied, &mut intersect);
+    let mut occupied: HashSet<Coord> = HashSet::new();
+    let cursor = populate_move(&Coord::new(1, 1), &Move::Left(3), &mut occupied);
     assert_eq!(3, occupied.len());
+    assert_eq!(Coord::new(-2, 1), cursor);
     assert!(occupied.contains(&Coord::new(0, 1)));
     assert!(occupied.contains(&Coord::new(-1, 1)));
     assert!(occupied.contains(&Coord::new(-2, 1)));
 
     occupied.clear();
-    populate_move(&Coord::new(1, 1), &Move::Right(3), &mut occupied, &mut intersect);
+    let cursor = populate_move(&Coord::new(1, 1), &Move::Right(3), &mut occupied);
     assert_eq!(3, occupied.len());
+    assert_eq!(Coord::new(4, 1), cursor);
     assert!(occupied.contains(&Coord::new(2, 1)));
     assert!(occupied.contains(&Coord::new(3, 1)));
     assert!(occupied.contains(&Coord::new(4, 1)));
+}
+
+fn populate_wire(moves: Vec<Move>) -> HashSet<Coord> {
+    let mut cursor = Coord::new(0, 0);
+    let mut occupied = HashSet::new();
+    for mv in moves {
+        cursor = populate_move(&cursor, &mv, &mut occupied);
+    }
+    occupied
+}
+
+#[test]
+fn populate_wire_test() {
+    let wire = vec![Move::Right(8), Move::Up(5), Move::Left(5), Move::Down(3)];
+    let occupied = populate_wire(wire);
+    //assert_eq!(21, occupied.len());
+    assert!(occupied.contains(&Coord::new(1, 0)));
+    assert!(occupied.contains(&Coord::new(2, 0)));
+    assert!(occupied.contains(&Coord::new(3, 0)));
+    assert!(occupied.contains(&Coord::new(4, 0)));
+    assert!(occupied.contains(&Coord::new(5, 0)));
+    assert!(occupied.contains(&Coord::new(6, 0)));
+    assert!(occupied.contains(&Coord::new(7, 0)));
+    assert!(occupied.contains(&Coord::new(8, 0)));
+    assert!(occupied.contains(&Coord::new(8, 1)));
+    assert!(occupied.contains(&Coord::new(8, 2)));
+    assert!(occupied.contains(&Coord::new(8, 3)));
+    assert!(occupied.contains(&Coord::new(8, 4)));
+    assert!(occupied.contains(&Coord::new(8, 5)));
+    assert!(occupied.contains(&Coord::new(7, 5)));
+    assert!(occupied.contains(&Coord::new(6, 5)));
+    assert!(occupied.contains(&Coord::new(5, 5)));
+    assert!(occupied.contains(&Coord::new(4, 5)));
+    assert!(occupied.contains(&Coord::new(3, 5)));
+    assert!(occupied.contains(&Coord::new(3, 4)));
+    assert!(occupied.contains(&Coord::new(3, 3)));
+    assert!(occupied.contains(&Coord::new(3, 2)));
 }
 
 #[test]
@@ -140,13 +160,16 @@ fn main() -> io::Result<()> {
     let f = File::open("input.txt")?;
     let mut f = BufReader::new(f);
 
+    // Load parse, and populate first wire moves.
     let mut line1 = String::from("");
     f.read_line(&mut line1).unwrap();
+    let first_moves = parse_moves(line1.split(',').map(|m| m.into()).collect::<Vec<String>>());
+    let _first_occupied = populate_wire(first_moves);
+
+    // Load and parse second wire moves.
     let mut line2 = String::from("");
     f.read_line(&mut line2).unwrap();
-
-    let first_moves = parse_moves(line1.split(',').map(|m| m.into()).collect::<Vec<String>>());
-    let second_moves = parse_moves(line2.split(',').map(|m| m.into()).collect::<Vec<String>>());
+    let _second_moves = parse_moves(line2.split(',').map(|m| m.into()).collect::<Vec<String>>());
 
     //let mut occupied = HashSet::new();
 
