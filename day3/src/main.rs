@@ -47,33 +47,40 @@ impl Coord {
 }
 
 fn populate_move(current: &Coord, mv: &Move, occupied: &mut HashSet<Coord>) -> Coord {
-    let mut x0 = current.x;
-    let mut x1 = current.x + 1;
-    let mut y0 = current.y;
-    let mut y1 = current.y + 1;
-
     match mv {
-        Move::Up(amount) => y1 += amount,
-        Move::Down(amount) => y0 -= amount,
-        Move::Left(amount) => x0 -= amount,
-        Move::Right(amount) => x1 += amount,
-    }
-
-    for x in x0..x1 {
-        for y in y0..y1 {
-            if x == y {
-                continue;
+        Move::Up(amount) => {
+            for y in (current.y + 1)..(current.y + amount + 1) {
+                occupied.insert(Coord::new(current.x, y));
             }
-            occupied.insert(Coord::new(x, y));
+        },
+
+        Move::Down(amount) => {
+            for y in ((current.y - amount)..current.y).rev() {
+                occupied.insert(Coord::new(current.x, y));
+            }
+
+        },
+
+        Move::Left(amount) => {
+            for x in ((current.x - amount)..current.x).rev() {
+                occupied.insert(Coord::new(x, current.y));
+            }
+
+        },
+
+        Move::Right(amount) => {
+            for x in (current.x + 1)..(current.x + amount + 1) {
+                occupied.insert(Coord::new(x, current.y));
+            }
         }
     }
 
     // Return new cursor position.
     match mv {
-        Move::Up(_) => Coord::new(x0, y1 - 1),
-        Move::Down(_) => Coord::new(x0, y0),
-        Move::Left(_) => Coord::new(x0, y0),
-        Move::Right(_) => Coord::new(x1 - 1, y0),
+        Move::Up(amount) => Coord::new(current.x, current.y + amount),
+        Move::Down(amount) => Coord::new(current.x, current.y - amount),
+        Move::Left(amount) => Coord::new(current.x - amount, current.y),
+        Move::Right(amount) => Coord::new(current.x + amount, current.y),
     }
 }
 
@@ -122,10 +129,10 @@ fn populate_wire(moves: Vec<Move>) -> HashSet<Coord> {
 }
 
 #[test]
-fn populate_wire_test() {
+fn test_populate_wire() {
     let wire = vec![Move::Right(8), Move::Up(5), Move::Left(5), Move::Down(3)];
     let occupied = populate_wire(wire);
-    //assert_eq!(21, occupied.len());
+    assert_eq!(21, occupied.len());
     assert!(occupied.contains(&Coord::new(1, 0)));
     assert!(occupied.contains(&Coord::new(2, 0)));
     assert!(occupied.contains(&Coord::new(3, 0)));
@@ -149,29 +156,73 @@ fn populate_wire_test() {
     assert!(occupied.contains(&Coord::new(3, 2)));
 }
 
-#[test]
-fn test_intersect() {
-    // TODO two moves that intersect
+fn find_intersections(a: &HashSet<Coord>, b: &HashSet<Coord>) -> HashSet<Coord> {
+    let mut intersections = HashSet::new();
+    for c in a {
+        if b.contains(c) {
+            intersections.insert(*c);
+        }
+    }
+    intersections
 }
 
-// TODO: shortest manhattan distance
+#[test]
+fn test_find_intersections() {
+    let a = populate_wire(vec![Move::Right(8), Move::Up(5), Move::Left(5), Move::Down(3)]);
+    let b = populate_wire(vec![Move::Up(7), Move::Right(6), Move::Down(4), Move::Left(4)]);
+    let intersections = find_intersections(&a, &b);
+    assert_eq!(2, intersections.len());
+    assert!(intersections.contains(&Coord::new(3, 3)));
+    assert!(intersections.contains(&Coord::new(6, 5)));
+}
+
+fn manhattan_distance_to(c: &Coord) -> i32 {
+    c.x.checked_abs().unwrap() + c.y.checked_abs().unwrap()
+}
+
+#[test]
+fn test_manhattan_distance_to() {
+    assert_eq!(4, manhattan_distance_to(&Coord::new(1, 3)));
+    assert_eq!(4, manhattan_distance_to(&Coord::new(3, 1)));
+    assert_eq!(10, manhattan_distance_to(&Coord::new(5, 5)));
+}
+
+fn shortest_dist(a: &str, b: &str) -> i32 {
+    let a_moves = parse_moves(a.trim().split(',').map(|m| m.into()).collect::<Vec<String>>());
+    let a_occupied = populate_wire(a_moves);
+    let b_moves = parse_moves(b.trim().split(',').map(|m| m.into()).collect::<Vec<String>>());
+    let b_occupied = populate_wire(b_moves);
+    let intersections = find_intersections(&a_occupied, &b_occupied);
+    // TODO: The below needs to be sorted for the take(1) to be correct!
+    let mut distances = intersections.iter()
+        .map(manhattan_distance_to)
+        .collect::<Vec<i32>>();
+    distances.sort();
+    distances[0]
+}
+
+#[test]
+fn test_shortest_dist() {
+    assert_eq!(6, shortest_dist("R8,U5,L5,D3", "U7,R6,D4,L4"));
+    assert_eq!(159, shortest_dist("R75,D30,R83,U83,L12,D49,R71,U7,L72", "U62,R66,U55,R34,D71,R55,D58,R83"));
+    assert_eq!(135, shortest_dist("R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51", "U98,R91,D20,R16,D67,R40,U7,R15,U6,R7"));
+}
 
 fn main() -> io::Result<()> {
     let f = File::open("input.txt")?;
     let mut f = BufReader::new(f);
 
-    // Load parse, and populate first wire moves.
+    // Load lines with moves.
     let mut line1 = String::from("");
     f.read_line(&mut line1).unwrap();
-    let first_moves = parse_moves(line1.split(',').map(|m| m.into()).collect::<Vec<String>>());
-    let _first_occupied = populate_wire(first_moves);
-
-    // Load and parse second wire moves.
     let mut line2 = String::from("");
     f.read_line(&mut line2).unwrap();
-    let _second_moves = parse_moves(line2.split(',').map(|m| m.into()).collect::<Vec<String>>());
 
-    //let mut occupied = HashSet::new();
+    // Do it!
+    let shortest = shortest_dist(&line1, &line2);
+
+    // Get the shortest manhattan distance.
+    println!("Shortest manhattan distance to intersection: {}", shortest);
 
     Ok(())
 }
