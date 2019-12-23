@@ -3,7 +3,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::fs::File;
 use std::str::FromStr;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq)]
 enum Move {
@@ -46,54 +46,84 @@ impl Coord {
     }
 }
 
-fn populate_move(current: &Coord, mv: &Move, occupied: &mut HashSet<Coord>) -> Coord {
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct Marker {
+    c: Coord,
+    step: i32,
+}
+
+impl Marker {
+    fn new(x: i32, y: i32, step: i32) -> Marker {
+        Marker { c: Coord::new(x, y), step }
+    }
+}
+
+fn populate_move(current: &Marker, mv: &Move, occupied: &mut HashMap<Coord, i32>) -> Marker {
+    let cur = current.c;
+    let mut step = current.step;
     match mv {
         Move::Up(amount) => {
-            for y in (current.y + 1)..(current.y + amount + 1) {
-                occupied.insert(Coord::new(current.x, y));
+            for y in (cur.y + 1)..(cur.y + amount + 1) {
+                step += 1;
+                // TODO: account for keeping the lowest step number if we've
+                // been here before
+                occupied.insert(Coord::new(cur.x, y), step);
             }
         },
 
         Move::Down(amount) => {
-            for y in ((current.y - amount)..current.y).rev() {
-                occupied.insert(Coord::new(current.x, y));
+            for y in ((cur.y - amount)..cur.y).rev() {
+                step += 1;
+                // TODO: account for keeping the lowest step number if we've
+                // been here before
+                occupied.insert(Coord::new(cur.x, y), step);
             }
 
         },
 
         Move::Left(amount) => {
-            for x in ((current.x - amount)..current.x).rev() {
-                occupied.insert(Coord::new(x, current.y));
+            for x in ((cur.x - amount)..cur.x).rev() {
+                step += 1;
+                // TODO: account for keeping the lowest step number if we've
+                // been here before
+                occupied.insert(Coord::new(x, cur.y), step);
             }
 
         },
 
         Move::Right(amount) => {
-            for x in (current.x + 1)..(current.x + amount + 1) {
-                occupied.insert(Coord::new(x, current.y));
+            for x in (cur.x + 1)..(cur.x + amount + 1) {
+                step += 1;
+                // TODO: account for keeping the lowest step number if we've
+                // been here before
+                occupied.insert(Coord::new(x, cur.y), step);
             }
         }
     }
 
     // Return new cursor position.
     match mv {
-        Move::Up(amount) => Coord::new(current.x, current.y + amount),
-        Move::Down(amount) => Coord::new(current.x, current.y - amount),
-        Move::Left(amount) => Coord::new(current.x - amount, current.y),
-        Move::Right(amount) => Coord::new(current.x + amount, current.y),
+        Move::Up(amount) => Marker::new(cur.x, cur.y + amount, current.step + amount),
+        Move::Down(amount) => Marker::new(cur.x, cur.y - amount, current.step + amount),
+        Move::Left(amount) => Marker::new(cur.x - amount, cur.y, current.step + amount),
+        Move::Right(amount) => Marker::new(cur.x + amount, cur.y, current.step + amount),
     }
 }
 
 #[test]
 fn test_populate_move() {
-    let mut occupied: HashSet<Coord> = HashSet::new();
-    let cursor = populate_move(&Coord::new(1, 1), &Move::Up(3), &mut occupied);
+    let mut occupied: HashMap<Coord, i32> = HashMap::new();
+    let cursor = populate_move(&Marker::new(1, 1, 1), &Move::Up(3), &mut occupied);
     assert_eq!(3, occupied.len());
-    assert_eq!(Coord::new(1, 4), cursor);
-    assert!(occupied.contains(&Coord::new(1, 2)));
-    assert!(occupied.contains(&Coord::new(1, 3)));
-    assert!(occupied.contains(&Coord::new(1, 4)));
+    assert_eq!(Marker::new(1, 4, 4), cursor);
+    assert!(occupied.contains_key(&Coord::new(1, 2)));
+    assert_eq!(Some(&2), occupied.get(&Coord::new(1, 2)));
+    assert!(occupied.contains_key(&Coord::new(1, 3)));
+    assert_eq!(Some(&3), occupied.get(&Coord::new(1, 3)));
+    assert!(occupied.contains_key(&Coord::new(1, 4)));
+    assert_eq!(Some(&4), occupied.get(&Coord::new(1, 4)));
 
+    // TODO: left off updating tests here
     let mut occupied: HashSet<Coord> = HashSet::new();
     let cursor = populate_move(&Coord::new(1, 1), &Move::Down(3), &mut occupied);
     assert_eq!(3, occupied.len());
@@ -120,7 +150,7 @@ fn test_populate_move() {
 }
 
 fn populate_wire(moves: Vec<Move>) -> HashSet<Coord> {
-    let mut cursor = Coord::new(0, 0);
+    let mut cursor = Coord::new(0, 0, 0);
     let mut occupied = HashSet::new();
     for mv in moves {
         cursor = populate_move(&cursor, &mv, &mut occupied);
